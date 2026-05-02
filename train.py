@@ -20,8 +20,8 @@ def parse_args() -> Namespace:
     parser.add_argument('--in_channels', type=int, default=1)
     parser.add_argument('--n_classes', type=int, default=2)
     
-    parser.add_argument('--n_epochs', type=int, default=1000)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--n_epochs', type=int, default=1_000)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--momentum', type=float, default=0.99)
 
@@ -29,7 +29,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--w0', type=float, default=10.0)
     parser.add_argument('--sigma', type=float, default=5.0)
 
-    parser.add_argument('--device', type=str, default='mps')
+    parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--pin_memory', type=bool, default=False)
     parser.add_argument('--seed', type=int, default=0)
@@ -62,8 +62,9 @@ def build_dataloaders(args: Namespace) -> DataLoader:
     train_loader = DataLoader(
         train_set, 
         args.batch_size, 
-        True, 
-        num_workers=args.num_workers
+        shuffle=True, 
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory
     )
     
     return train_loader

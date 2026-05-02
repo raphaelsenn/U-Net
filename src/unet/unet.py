@@ -6,14 +6,16 @@ import torchvision.transforms.functional as TF
 
 class DoubleConv2d(nn.Module):
     def __init__(self, in_channels: int, out_channels: int) -> None:
-        super().__init__()        
+        super().__init__()
+
         self.double_conv2d = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, 1, 0),
             nn.ReLU(True),
+
             nn.Conv2d(out_channels, out_channels, 3, 1, 0),
             nn.ReLU(True),
         )
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.double_conv2d(x)
 
@@ -47,6 +49,29 @@ class Up(nn.Module):
         return self.double_conv2d(x)        
 
 
+class Bottleneck(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        dropout_p: float = 0.5,
+    ) -> None:
+        super().__init__()
+
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 1, 0),
+            nn.ReLU(True),
+            nn.Dropout2d(p=dropout_p),
+
+            nn.Conv2d(out_channels, out_channels, 3, 1, 0),
+            nn.ReLU(True),
+            nn.Dropout2d(p=dropout_p),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
 class UNet(nn.Module):
     """
     Implementation of the U-Net architecture for image segmentation.
@@ -68,10 +93,7 @@ class UNet(nn.Module):
         self.down4 = Down(4 * feature_channels, 8 * feature_channels)
 
         # Bottleneck
-        self.bottleneck = nn.Sequential(
-            DoubleConv2d(8 * feature_channels, 16 * feature_channels),
-            nn.Dropout(0.5)
-        )
+        self.bottleneck = Bottleneck(8 * feature_channels, 16 * feature_channels)
 
         # Expanding path
         self.up1 = Up(16 * feature_channels, 8 * feature_channels)
@@ -101,14 +123,16 @@ class UNet(nn.Module):
         up = self.up4(x1, up)
         return self.final_conv2d(up)
 
+    @torch.no_grad()
     def predict_tiled(
-            self, 
-            image: torch.Tensor, 
-            patch_size: int=256,
-            unet_input_shape: tuple[int, int] = (572, 572),
+        self,
+        image: torch.Tensor,
+        patch_size: int = 256,
+        stride: int = 128,
+        unet_input_shape: tuple[int, int] = (572, 572),
     ) -> torch.Tensor:
         """
-        Predict a full-size segmentation map using tiled prediction.
+        Predict a full-size segmentation map using overlapping tiled prediction.
 
         image: [B, C, H, W]
 
@@ -117,29 +141,60 @@ class UNet(nn.Module):
             -> reflect pad to 572 x 572
             -> U-Net output 388 x 388
             -> center crop to 256 x 256
-            -> paste into full prediction
-        """ 
-        self.eval() 
+            -> accumulate into full prediction
+            -> average overlapping logits
+        """
+        self.eval()
 
-        B, _, H, W = image.shape 
+        B, _, H, W = image.shape
         C_out = self.out_channels
-        pred = torch.zeros(
-            size=(B, C_out, H, W), dtype=torch.float32, device=image.device
+
+        pred_sum = torch.zeros(
+            (B, C_out, H, W),
+            dtype=torch.float32,
+            device=image.device,
         )
-        
+
+        pred_count = torch.zeros(
+            (B, 1, H, W),
+            dtype=torch.float32,
+            device=image.device,
+        )
+
         margin_h = (unet_input_shape[0] - patch_size) // 2
         margin_w = (unet_input_shape[1] - patch_size) // 2
-        for i in range(0, H, patch_size):
-            for j in range(0, W, patch_size):
-                img_patch = image[:, :, i:i+patch_size, j:j+patch_size] # [B, C=1, 256, 256]
+
+        # Tile start positions
+        y_starts = list(range(0, max(H - patch_size + 1, 1), stride))
+        x_starts = list(range(0, max(W - patch_size + 1, 1), stride))
+
+        if y_starts[-1] != H - patch_size:
+            y_starts.append(H - patch_size)
+
+        if x_starts[-1] != W - patch_size:
+            x_starts.append(W - patch_size)
+
+        y_starts = [max(0, y) for y in y_starts]
+        x_starts = [max(0, x) for x in x_starts]
+
+        for i in y_starts:
+            for j in x_starts:
+                img_patch = image[:, :, i:i + patch_size, j:j + patch_size]
+
                 img_patch = TF.pad(
                     img_patch,
                     padding=[margin_w, margin_h, margin_w, margin_h],
                     padding_mode="reflect",
-                )                                                       # [B, C=1, 572, 572]
-                pred_patch = self(img_patch)                            # [B, C=2, 388, 388]
-                pred_patch = TF.center_crop(pred_patch, 2*[patch_size]) # [B, C=2, 256, 256]
-                pred[:, :, i:i+patch_size, j:j+patch_size] = pred_patch
+                )
+                pred_patch = self(img_patch)  # [B, C, 388, 388]
+                pred_patch = TF.center_crop(
+                    pred_patch,
+                    [patch_size, patch_size],
+                )                             # [B, C, 256, 256]
+
+                pred_sum[:, :, i:i + patch_size, j:j + patch_size] += pred_patch
+                pred_count[:, :, i:i + patch_size, j:j + patch_size] += 1.0
+        pred = pred_sum / pred_count.clamp_min(1.0)
         return pred
 
     def _initialize_weights(self) -> None:

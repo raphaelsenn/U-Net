@@ -60,6 +60,12 @@ python3 train.py --epochs=100 --learning_rate=0.001 --momentum=0.99 --batch_size
 
 #### U-Net Inference on Test Data
 
+| Group name | Wraping Error | Rand Error | Pixel Error |
+| ---------- | ------------- | ---------- | ----------- |
+| U-Net (Original) | 0.000353 | 0.0382 | 0.0611 |
+| U-Net (Mine) | 0.000355 | 0.0384 | 0.0618 |
+
+
 <p align="center">
   <img src="./assets/proposal_em_stacks.png" alt="U-Net inference segmentations on EM stacks" width="900"/>
 </p>
