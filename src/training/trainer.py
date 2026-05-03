@@ -39,11 +39,11 @@ class UNetTrainer:
     def train_one_epoch(self, dataloader: DataLoader) -> None:
         self.model.train() 
         for img, mask, weight in dataloader:
-            img = img.to(self.device)           # [B, C, 512, 512]
-            mask = mask.to(self.device)         # [B, 1, 388, 388]
-            weight = weight.to(self.device)     # [B, 1, 388, 388]
+            img = img.to(self.device)           # [B, C=1, 512, 512]
+            mask = mask.to(self.device)         # [B, 388, 388]
+            weight = weight.to(self.device)     # [B, 388, 388]
 
-            logits = self.model(img)
+            logits = self.model(img)            # [B, C=2, 388, 388]
             loss = self.criterion(logits, mask, weight)
             
             self.optimizer.zero_grad()

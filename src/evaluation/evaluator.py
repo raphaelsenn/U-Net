@@ -71,13 +71,12 @@ class UNetEvaluator:
         total_loss = 0.0
         for img, target, _ in dataloader:
             B, H, W = target.shape
-
-            # NOTE: For evaluation i am not using the tiling strategy from the paper
+            
             img = img.to(self.device)               # [B, 1, 512, 512]
             target = target.to(self.device)         # [B, 512, 512]
             
-            logits = self.model.predict_tiled(img)  # [B, 2, 516, 516]
-            preds = torch.argmax(logits, dim=1)     # [B, 516, 516]
+            logits = self.model.predict_tiled(img)  # [B, 2, 512, 512]
+            preds = torch.argmax(logits, dim=1)     # [B, 512, 512]
 
             loss = self.criterion(logits, target)
 

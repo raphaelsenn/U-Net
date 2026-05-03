@@ -177,6 +177,8 @@ class UNet(nn.Module):
         y_starts = [max(0, y) for y in y_starts]
         x_starts = [max(0, x) for x in x_starts]
 
+        # Applying U-Net on patches
+        # Take a look here: https://www.youtube.com/watch?v=LM9yisNYfyw
         for i in y_starts:
             for j in x_starts:
                 img_patch = image[:, :, i:i + patch_size, j:j + patch_size]

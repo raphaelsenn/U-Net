@@ -58,7 +58,7 @@ class UNetVisualizer:
             ax[r, 0].set_ylabel(titles[r])
 
         for c in range(min(N_COLS, len(self.dataset))):
-            x, y = self.dataset[c]                              # [1, 512, 704], [512, 512]
+            x, y = self.dataset[c]                              # [1, 512, 512], [512, 512]
             if x.ndim == 2:
                 x = x.unsqueeze(0)                              # [1, 1, 512, 512]
             x_in = x.unsqueeze(0).to(self.cfg.device)           # [1, 1, 512, 512]
